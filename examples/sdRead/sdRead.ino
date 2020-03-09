@@ -19,7 +19,7 @@ void setup() {
   SerialUSB.begin(115200);
   while(!SerialUSB)
   SerialUSB.print("Initializing FlashDisk...");
-  if (!SD.begin(32)) {
+  if (!SD.begin(3)) {
     SerialUSB.println("initialization failed!");
     while (1);
   }
