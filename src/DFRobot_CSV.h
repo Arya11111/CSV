@@ -3,7 +3,9 @@
 #include <Stream.h>
 #include <UD.h>
 #include <SD.h>
+#ifdef ARDUINO_SAM_ZERO
 #include <variant.h>
+#endif
 
 #ifndef DFRobot_CSV_H
 #define DFRobot_CSV_H

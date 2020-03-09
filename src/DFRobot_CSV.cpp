@@ -14,12 +14,12 @@ DFRobot_CSV::DFRobot_CSV()
 DFRobot_CSV::DFRobot_CSV(void *file)
 {
     
-    SerialUSB.println("DFRobot_CSV");
+    //SerialUSB.println("DFRobot_CSV");
     csv_init(&_p,0);
     _file = file;
-    SerialUSB.println("DFRobot_CSV");
+    //SerialUSB.println("DFRobot_CSV");
     char *nameType = ((UDFile *)_file)->name();
-    SerialUSB.println("DFRobot_CSV");
+    //SerialUSB.println("DFRobot_CSV");
     String str = String(nameType);
     
     if(str.length()>3){
@@ -33,8 +33,8 @@ DFRobot_CSV::DFRobot_CSV(void *file)
         _type = TYPE_CSV_SD;
     }
     
-    //SerialUSB.println("DFRobot_CSV");
-    //SerialUSB.println(_type);
+    //Serial.println("DFRobot_CSV");
+    //Serial.println(_type);
     //while(1);
 }
 
