@@ -21,100 +21,8 @@
 #define TYPE_CSV_SD   2
 #define FLAG_CSV_UD   "UD:"
 #define FILE_SEND_SIZE  0xFFFF
-
-
-/////////////////////////////////////////
-////////////////////////////////
-/*
-class DFRobot_CSV
-{
-public:
-
-/*
-typedef struct plist{
-	String pt;
-	struct plist *ppt;
-} sp_t;*/
- 
-   /* DFRobot_CSV();
-  //  template <class T>
-    DFRobot_CSV(void *file);
-    ~DFRobot_CSV();
-
-    size_t write(uint8_t);
-    size_t write(const char *str) {
-      if (str == NULL) return 0;
-      return write((const uint8_t *)str, strlen(str));
-    }
-    size_t write(const uint8_t *buf, size_t size);
-    size_t write(const char *buffer, size_t size) {
-      return write((const uint8_t *)buffer, size);
-    }
-
-//  size_t print(const __FlashStringHelper *);
-    size_t print(const String &);
-    size_t print(const char[]);
-    size_t print(char);
-    size_t print(unsigned char, int = DEC);
-    size_t print(int, int = DEC);
-    size_t print(unsigned int, int = DEC);
-    size_t print(long, int = DEC);
-//    size_t print(const Printable&);
-    size_t print(unsigned long, int = DEC);
-    size_t print(double, int = 2);
-  
-//  size_t println(const __FlashStringHelper *);
-    size_t println(const String &s);
-    size_t println(const char[]);
-    size_t println(char);
-    size_t println(unsigned char, int = DEC);
-    size_t println(int, int = DEC);
-    size_t println(unsigned int, int = DEC);
-    size_t println(long, int = DEC);
-    size_t println(unsigned long, int = DEC);
-    size_t println(double, int = 2);
-//  size_t println(const Printable&);
-    size_t println(void);
-	
-
-    int getRow();
-    int getColumn(int);
-    bool readRow(int, String *);
-    String readItem(int row, int column);
-//    operator bool();
-private:
-    typedef struct csv_parser sCSVParse_t;
-    sCSVParse_t _p;
-    void * _file;
-    uint8_t _type;
-    size_t printNumber(unsigned long, uint8_t);
-    size_t printFloat(double, uint8_t); 
-};
-*/
 #define CSV_WRITE_BUFFER     512
 #define CSV_READ_BUFFER     512
-
-
-
-//#define CSV_CMD_UPDATE  0
-//#define CSV_CMD_READ_COLUMN  4
-//#define CSV_CMD_READ_ITEM  2
-//#define CSV_CMD_WRITE_ITEM  2
-//#define CSV_CMD_GET_MAX_COL  3
-//#define CSV_CMD_DELETE_AREA  5
-
-/*typedef struct{//存放最后一行的数据
-  int rawIndex;
-  int colIndex;
-  int raw;//当前项所在行
-  int column;//当前项所在列
-  int pos;//当前项数据的起始位置
-  int length;//当前项的数据长度
-  int maxColOfCurRaw;//当前项所在行有多少列
-  int maxRawofCurCol;//当前项所在列有多少行
-  uint32_t startPosOfRaw;//行的起始位置
-  uint32_t endPosOfRaw;//行的终止位置
-}sItem_t, *pItem_t;*/
 
 typedef struct{//存放最后一行的数据
   uint8_t cmd;
@@ -148,11 +56,11 @@ static void cbCountRow(int c, void *data);
 #define CSV_CMD_ADD_COL  8
 #define CSV_CMD_ADD_ITEM  9
 #define CSV_CMD_GET_MAXCOLOFRAW  10
-class CSV: public Print,public CommonFile{
+class DFRobot_CSV: public Print,public CommonFile{
 public:
-  CSV();
-  CSV(void *file);
-  ~CSV();
+  DFRobot_CSV();
+  DFRobot_CSV(void *file);
+  ~DFRobot_CSV();
   void CreateNewStandardForm(int row, int column);
   bool read(String *s);//顺序读，成功返回True，失败返回false
   String readRaw(int raw);//整行读
@@ -161,6 +69,7 @@ public:
   bool readColumn(int col, String *s);//整列读
   //bool writeColumn(int col, String *s);//整列写，暂未实现
   bool readItem(int row, int column, String *s);//定位读
+  String readItem(int row, int column);//定位读
   //bool writeItem(int row, int column, String s);//定位写,暂未实现
   //bool deleteItem(int row, int column);//定位删除,暂未实现
   //bool deleteRaw(int raw);//整行删除,自动补齐,暂未实现

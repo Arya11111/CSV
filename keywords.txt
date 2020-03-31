@@ -4,7 +4,7 @@
 # Class
 #######################################
 
-CSV	KEYWORD1
+DFRobot_CSV	KEYWORD1
 
 #######################################
 # Methods and Functions 
