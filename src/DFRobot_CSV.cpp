@@ -1,585 +1,437 @@
-
 #include <math.h>
-
-
-
 #include <DFRobot_CSV.h>
+#include "ComFile.h"
 
-DFRobot_CSV::DFRobot_CSV()
+//列计算逗号的个数
+static void cbCountColumn(void *s, size_t i, void *data){
+  pItem_t pItem = (pItem_t)data;
+  switch(pItem->cmd){
+      case CSV_CMD_UPDATE:
+           pItem->colIndex++;
+           break;
+      case CSV_CMD_READ_RAW:
+          if((pItem->rawIndex == (pItem->raw - 1))&&(pItem->colIndex == 0)){
+              pItem->startPos = pItem->posIndex;
+          }
+          pItem->posIndex += i;
+          pItem->colIndex++;
+          break;
+      case CSV_CMD_WRITE_RAW:
+           break;
+      case CSV_CMD_READ_COL:
+           pItem->colIndex++;
+           if(pItem->colIndex == pItem->column){
+               for(size_t j = 0; j < i; j++){
+                   pItem->data += ((char *)s)[j];
+               }
+               if(i == 0) pItem->data += "NULL\r\n";
+               pItem->data += '\r\n';
+           }
+           break;
+      case CSV_CMD_WRITE_COL:
+           break;
+      case CSV_CMD_READ_ITEM:
+           pItem->colIndex++;
+           if((pItem->rawIndex == (pItem->raw - 1))&&(pItem->colIndex == pItem->column)){
+              pItem->startPos = pItem->posIndex;
+              for(size_t j = 0; j < i; j++){
+                   pItem->data += ((char *)s)[j];
+               }
+              if(i == 0) pItem->data += "NULL";
+			  pItem->endPos = pItem->posIndex + i;
+           }
+           break;
+      case CSV_CMD_WRITE_ITEM:
+           break;
+      case CSV_CMD_ADD_RAW:
+           break;
+      case CSV_CMD_ADD_COL:
+           break;
+      case CSV_CMD_ADD_ITEM:
+           break;
+	  case CSV_CMD_GET_MAXCOLOFRAW:
+           pItem->colIndex++;
+		   break;
+  }
+}
+static void cbCountRow(int c, void *data){
+  pItem_t pItem = (pItem_t)data;
+  switch(pItem->cmd){
+      case CSV_CMD_UPDATE:
+           if(c < 0) pItem->colIndex -= 1;
+           if(pItem->colIndex > pItem->colMax) pItem->colMax = pItem->colIndex;
+           pItem->colIndex = 0;
+           pItem->rawIndex++;
+           if(pItem->rawIndex > pItem->rawMax) pItem->rawMax = pItem->rawIndex;
+           break;
+      case CSV_CMD_READ_RAW:
+           pItem->rawIndex++;
+           pItem->posIndex -= 1;
+           if(c < 0) pItem->colIndex -= 1;
+           pItem->posIndex += (pItem->colIndex+1);
+           if(pItem->rawIndex == pItem->raw)
+               pItem->endPos = pItem->posIndex;
+           pItem->colIndex = 0;
+           pItem->posIndex += 1;
+           break;
+      case CSV_CMD_WRITE_RAW:
+           break;
+      case CSV_CMD_READ_COL:
+           pItem->rawIndex++;
+           pItem->colIndex = 0;
+           break;
+      case CSV_CMD_WRITE_COL:
+           break;
+      case CSV_CMD_READ_ITEM:
+	       pItem->colIndex = 0;
+           pItem->rawIndex++;
+           break;
+      case CSV_CMD_WRITE_ITEM:
+           break;
+      case CSV_CMD_ADD_RAW:
+           break;
+      case CSV_CMD_ADD_COL:
+           break;
+      case CSV_CMD_ADD_ITEM:
+           break;
+	  case CSV_CMD_GET_MAXCOLOFRAW:
+           pItem->rawIndex++;
+		   if(pItem->rawIndex == pItem->raw){
+			   pItem->column = pItem->colIndex;
+		   }
+		   pItem->colIndex = 0;
+		   break;
+  }
+  //DBG("pItem->rawIndex = ");
+  //DBG(pItem->rawIndex);
+  /*switch(csvCmd){//更新获取最大行，最大列
+      case CSV_CMD_UPDATE:
+          if(c < 0) csvItem.column -= 1;
+          if(csvItem.column > csvAttribute.colMax) csvAttribute.colMax = csvItem.column;
+          csvItem.column = 0;
+          csvItem.raw++;
+          if(csvItem.raw > csvAttribute.rawMax) csvAttribute.rawMax = csvItem.raw;
+          break;
+      case CSV_CMD_READ_RAW:
+      {
+          if(!data) return;
+          int b = *((int *)data);
+          csvItem.raw++;
+          csvPositionIndex -= 1;
+          if(c < 0) csvItem.column -= 1;
+          csvPositionIndex += (csvItem.column + 1);
+          if(csvItem.raw == b)
+              csvItem.endPosOfRaw = csvPositionIndex;
+          csvItem.column = 0;
+          csvPositionIndex += 1;
+          //DBG(csvPositionIndex);
+          break;
+      }
+      case CSV_CMD_READ_ITEM:
+          csvItem.rawIndex++;
+          if(c < 0) csvItem.colIndex -= 1;
+          if(csvItem.rawIndex == csvItem.raw){
+              csvItem.maxColOfCurRaw = csvItem.colIndex;
+          }
+          csvItem.colIndex = 0;
+          break;
+      case CSV_CMD_GET_MAX_COL:
+          csvItem.raw++;
+          break;
+      case CSV_CMD_READ_COLUMN:
+          csvItem.rawIndex++;
+          csvItem.colIndex = 0;
+          break;
+      case CSV_CMD_WRITE_ITEM:
+          csvItem.rawIndex++;
+          if()
+          break;
+  }*/
+}
+CSV::CSV()
 {
-    csv_init(&_p,0);
-    _file = NULL;
+  //csv_init(&_p,0);
+  memset(_readBuf,0,sizeof(_readBuf));
+  memset(_writeBuf,0,sizeof(_writeBuf));
+  memset(&_item,0,sizeof(sItem_t));
+  _flag = 1;
 }
 
-DFRobot_CSV::DFRobot_CSV(void *file)
+CSV::CSV(void *file):CommonFile(file){
+  csv_init(&_p,0);
+  memset(_readBuf,0,sizeof(_readBuf));
+  memset(_writeBuf,0,sizeof(_writeBuf));
+  memset(&_item,0,sizeof(sItem_t));
+  _flag = 1;
+}
+CSV::~CSV()
 {
-    
-    //SerialUSB.println("DFRobot_CSV");
-    csv_init(&_p,0);
-    _file = file;
-    //SerialUSB.println("DFRobot_CSV");
-    char *nameType = ((UDFile *)_file)->name();
-    //SerialUSB.println("DFRobot_CSV");
-    String str = String(nameType);
-    
-    if(str.length()>3){
-        String sType = str.substring(0, 3);
-        if((sType == "UD:") && (sType.length() < str.length())){
-            _type = TYPE_CSV_UD;
-        }else{
-            _type = TYPE_CSV_SD;
-        }
-    }else{
-        _type = TYPE_CSV_SD;
-    }
-    
-    //Serial.println("DFRobot_CSV");
-    //Serial.println(_type);
-    //while(1);
+  if(_p.entry_buf)
+  _p.free_func(_p.entry_buf);
 }
 
-
-DFRobot_CSV::~DFRobot_CSV()
-{
-    if(_p.entry_buf)
-    _p.free_func(_p.entry_buf);
+void CSV::CreateNewStandardForm(int row, int column){
+  for(int i = 0; i < row; i++){
+      for(int j = 0; j < column; j++){
+          print("NULL");
+      }
+      println();
+  }
+}
+bool CSV::update(){
+  memset(_readBuf, 0, sizeof(_readBuf));
+  memset(&_item, 0 , sizeof(sItem_t));
+  uint16_t temp = 0;
+  _item.cmd = CSV_CMD_UPDATE;
+  seek(0);
+  while((temp = readBuf(_readBuf, CSV_READ_BUFFER))){
+      if(csv_parse(&_p, _readBuf, temp, cbCountColumn, cbCountRow, &_item) != temp){
+          seek(size());
+          return false;
+      }
+  }
+  csv_fini(&_p, cbCountColumn, cbCountRow, &_item);
+  seek(size());
+}
+bool CSV::read(String *s){
+  if(!s) return false;
+  uint16_t temp = 0;
+  *s = "";
+  seek(0);
+  while((temp = readBuf(_readBuf, CSV_READ_BUFFER))){
+      for(uint16_t i = 0; i < temp; i++){
+          *s += (char)_readBuf[i];
+      }
+  }
+  seek(size());
+  return true;
+}
+bool CSV::readRaw(int raw, String *s){//获取行的起始位置和结束位置
+  if(!raw || !s) return false;
+  *s = "";
+  memset(&_item, 0, sizeof(sItem_t));
+  _item.cmd = CSV_CMD_READ_RAW;
+  _item.raw = raw;
+  uint16_t temp = 0,left = 0;
+  seek(0);
+  while((csvItem.rawIndex < raw) && (temp = readBuf(_readBuf, CSV_READ_BUFFER))){
+      _item.posIndex = position() - temp;
+      if(csv_parse(&_p, _readBuf, temp, cbCountColumn, cbCountRow, &_item) != temp){
+          seek(size());
+          return false;
+      }
+  }
+  csv_fini(&_p, cbCountColumn, cbCountRow, &_item);
+  if(raw == getRaw()) _item.endPos = position() - 1;
+  left = _item.endPos - _item.startPos + 1;
+  seek(_item.startPos);
+  while(left){
+      left > CSV_READ_BUFFER ? temp = CSV_READ_BUFFER : temp = left;
+      left -= temp;
+      if(readBuf(_readBuf, temp) != temp){
+          seek(size());
+          return false;
+      }
+      for(uint16_t i = 0; i < temp; i++){
+          *s += (char)_readBuf[i];
+      }
+  }
+  seek(size());
+  return true;
+}
+bool CSV::writeRaw(int raw, String s){
+  if(raw > getRaw()) return false;
+  String rs = readRaw(raw);
+  int length = rs.length();
+  seek(_item.endPos);
+  if(peek() == '\n') length -= 2;
+  char *pBuf = (char *)s.c_str();
+  if(s.length() > length){//增加
+      seek(_item.startPos);
+      writeBuf(pBuf, length);
+      pBuf += length;
+      insert(_item.startPos+length, pBuf, (s.length() - length));
+  }else{//覆盖和删除
+      seek(_item.startPos);
+      writeBuf(pBuf, s.length());
+      uint32_t index = position();
+      move(_item.startPos + length, index);
+  }
+  seek(size());
+}
+bool CSV::readColumn(int col, String *s){
+  if(col > getColumn() || !s) return false;
+  *s = "";
+  memset(&_item, 0, sizeof(sItem_t));
+  _item.cmd = CSV_CMD_READ_COL;
+  _item.column = col;
+  uint16_t temp = 0;
+  seek(0);
+  while(temp = readBuf(_readBuf, CSV_READ_BUFFER)){
+      if(csv_parse(&_p, _readBuf, temp, cbCountColumn, cbCountRow, &_item) != temp){
+          seek(size());
+          return false;
+      }
+  }
+  csv_fini(&_p, cbCountColumn, cbCountRow, &_item);
+  *s += _item.data;
+  seek(size());
+}
+bool CSV::readItem(int raw, int column, String *s){
+  if(raw > getRaw() || !s) return false;
+  *s = "";
+  memset(&_item, 0, sizeof(sItem_t));
+  _item.cmd = CSV_CMD_READ_ITEM;
+  _item.raw = raw;
+  _item.column = column;
+  uint16_t temp = 0;
+  seek(0);
+  while((csvItem.rawIndex < raw) && (temp = readBuf(_readBuf, CSV_READ_BUFFER))){
+      _item.posIndex = position() - temp;
+      if(csv_parse(&_p, _readBuf, temp, cbCountColumn, cbCountRow, &_item) != temp){
+          seek(size());
+          return false;
+      }
+  }
+  csv_fini(&_p, cbCountColumn, cbCountRow, &_item);
+  *s += _item.data;
+  seek(size());
 }
 
+int CSV::getRaw(){
+  update();
+  return _item.rawMax;
+}
+int CSV::getColumn(){
+  update();
+  return _item.colMax;
+}
+int CSV::readMaxColumnOfRaw(int raw){
+  if(raw > getRaw()) return 0;
+  memset(&_item, 0, sizeof(sItem_t));
+  _item.cmd = CSV_CMD_GET_MAXCOLOFRAW;
+  _item.raw = raw;
+  uint16_t temp = 0;
+  seek(0);
+  while(temp = readBuf(_readBuf, CSV_READ_BUFFER)){
+      if(csv_parse(&_p, _readBuf, temp, cbCountColumn, cbCountRow, &_item) != temp){
+          seek(size());
+          return false;
+      }
+  }
+  csv_fini(&_p, cbCountColumn, cbCountRow, &_item);
+  seek(size());
+  return _item.column;
+}
 
-size_t DFRobot_CSV::write(uint8_t val)
+String CSV::readRaw(int raw){
+  String s = "";
+  readRaw(raw, &s);
+  seek(size());
+  return s;
+}
+size_t CSV::write(uint8_t val)
 {
   return write(&val, 1);
 }
 
-size_t DFRobot_CSV::write(const uint8_t *buf, size_t size)
+size_t CSV::write(const uint8_t *buf, size_t size)
 {
-  switch(_type){
-      case TYPE_CSV_UD:
-           return ((UDFile *)_file)->write(buf,size);
-      case TYPE_CSV_SD:
-           return ((File *)_file)->write(buf,size);
-  }
-}
-
-size_t DFRobot_CSV::print(const String &s)
-{
-  int i,j,t;
-  void *te = malloc(s.length()*2+3);
-  char * temp = (char *)te;
-  temp[0] = '"';
-  for(i=0,j=1;i<s.length();i++) {
-      if(*(s.c_str()+i) == '"') {
-          temp[j++] = '"';
+  if(!buf) return 0;
+  uint8_t *pBuf = (uint8_t *)buf;
+  if((size > 1)&&(pBuf[size - 1] == '\n')&&(pBuf[size - 2] == '\r')){
+      uint32_t pos = position();
+      if((size == 2)&& (pos != 0)){
+          seek(pos - 1);
+          if(peek() != ',') seek(pos);
       }
-      temp[j++] = *(s.c_str()+i);     
+      _flag = 0;
   }
-  temp[j++] = '"';
-  temp[j++] = ',';
-  t = write(temp,j);
-  free(temp);
-  return t;
-}
-
-size_t DFRobot_CSV::print(const char str[])
-{
-  int i,j,t;
-  void *te = malloc(strlen(str)*2+3);
-  char * temp = (char *)te;
-  temp[0] = '"';
-  for(i=0,j=1;i<strlen(str);i++) {
-      if(str[i] == '"') {
-          temp[j++] = '"';
+  uint32_t left = size + _flag;
+  while(left){
+      left > CSV_WRITE_BUFFER ? size = CSV_WRITE_BUFFER : size = left;
+      left -= size;
+      memset(_writeBuf, 0, sizeof(_writeBuf));
+      if((size < CSV_WRITE_BUFFER) && _flag){
+          memcpy(_writeBuf, pBuf, size - 1);
+          _writeBuf[size - 1] = ',';
+      }else{
+          memcpy(_writeBuf, pBuf, size);
       }
-      temp[j++] = str[i];     
+      writeBuf(_writeBuf, size);
+      pBuf += size;
   }
-  temp[j++] = '"';
-  temp[j++] = ',';
-  t = write(temp,j);
-  free(temp);
-  return t;
+  if(!_flag) _flag = 1;
+  return left;
 }
 
-size_t DFRobot_CSV::print(char c)
+size_t CSV::print(long n, int base)
 {
-  int i = 1;
-  char temp[5];
-  temp[0] = '"';
-  if(c == '"')
-      temp[i++] = '"';
-  temp[i++] = c;
-  temp[i++] = '"';
-  temp[i++] = ',';
-  return write(temp,i);
-}
-
-size_t DFRobot_CSV::print(unsigned char b, int base)
-{
-  return print((unsigned long) b, base);
-}
-
-size_t DFRobot_CSV::print(int n, int base)
-{
-  return print((long) n, base);
-}
-
-size_t DFRobot_CSV::print(unsigned int n, int base)
-{
-  return print((unsigned long) n, base);
-}
-
-size_t DFRobot_CSV::print(long n, int base)
-{
-  size_t tem;
-  if (base == 0) {
-    tem = write(n);
-    tem += write(',');
-    return tem;
-  } else if (base == 10) {
-    if (n < 0) {
-      int t = print('-');
-      n = -n;
-      tem = printNumber(n, 10) + t;
-      tem += write(',');
-      return tem;
-    }
-    tem = printNumber(n, 10);
-    tem += write(',');
-    return tem;
-  } else {
-    tem = printNumber(n, base);
-    tem += write(',');
-    return tem;
-  }
-}
-
-size_t DFRobot_CSV::print(unsigned long n, int base)
-{
-  size_t t;
-  if (base == 0) {t = write(n);t += write(',');return t;}
-  else {t =  printNumber(n, base);t += write(',');return t;}
-}
-
-size_t DFRobot_CSV::print(double n, int digits)
-{
-  size_t t;
-  t = printFloat(n, digits);
-  t += write(',');
-  return t;
-}
-
-size_t DFRobot_CSV::println(void)
-{
-  return write("\r\n");
-}
-
-size_t DFRobot_CSV::println(const String &s)
-{
-  int i,j,t;
-  void *te = malloc(s.length()*2+4);
-  char * temp = (char *)te;
-  temp[0] = '"';
-  for(i=0,j=1;i<s.length();i++) {
-      if(*(s.c_str()+i) == '"') {
-          temp[j++] = '"';
-      }
-      temp[j++] = *(s.c_str()+i);     
-  }
-  temp[j++] = '"';
-  temp[j++] = '\r';
-  temp[j++] = '\n';
-  t = write(temp,j);
-  free(temp);
-  return t;
-}
-
-size_t DFRobot_CSV::println(const char str[])
-{
-  int i,j,t;
-  void *te = malloc(strlen(str)*2+4);
-  char * temp = (char *)te;
-  temp[0] = '"';
-  for(i=0,j=1;i<strlen(str);i++) {
-      if(str[i] == '"') {
-          temp[j++] = '"';
-      }
-      temp[j++] = str[i];     
-  }
-  temp[j++] = '"';
-  temp[j++] = '\r';
-  temp[j++] = '\n';
-  t = write(temp,j);
-  free(temp);
-  return t;
-}
-
-size_t DFRobot_CSV::println(char c)
-{
-  int i = 1;
-  char temp[6];
-  temp[0] = '"';
-  if(c == '"')
-      temp[i++] = '"';
-  temp[i++] = c;
-  temp[i++] = '"';
-  temp[i++] = '\r';
-  temp[i++] = '\n';
-  return write(temp,i);
-}
-
-size_t DFRobot_CSV::println(unsigned char b, int base)
-{
-  return println((unsigned long) b, base);
-}
-
-size_t DFRobot_CSV::println(int num, int base)
-{
-  return println((long) num, base);
-}
-
-size_t DFRobot_CSV::println(unsigned int num, int base)
-{
-  return println((unsigned long) num, base);
-}
-
-size_t DFRobot_CSV::println(long num, int base)
-{
-  size_t tem;
-  if (base == 0) {
-    tem = write(num);
-    tem += write("\r\n");
-    return tem;
-  } else if (base == 10) {
-    if (num < 0) {
-      int t = print('-');
-      num = -num;
-      tem = printNumber(num, 10) + t;
-      tem += write("\r\n");
-      return tem;
-    }
-    tem = printNumber(num, 10);
-    tem += write("\r\n");
-    return tem;
-  } else {
-    tem = printNumber(num, base);
-    tem += write("\r\n");
-    return tem;
-  }
-}
-
-size_t DFRobot_CSV::println(unsigned long n, int base)
-{
-  size_t t;
-  if (base == 0) {t = write(n);t += write("\r\n");return t;}
-  else {t =  printNumber(n, base);t += write("\r\n");return t;}
-}
-
-size_t DFRobot_CSV::println(double num, int digits)
-{
-  size_t n = print(num, digits);
-  n += println();
-  return n;
-}
-
-
-// Private Methods /////////////////////////////////////////////////////////////
-
-size_t DFRobot_CSV::printNumber(unsigned long n, uint8_t base)
-{
+  int t = 0;
   char buf[8 * sizeof(long) + 1]; // Assumes 8-bit chars plus zero byte.
   char *str = &buf[sizeof(buf) - 1];
-
   *str = '\0';
-
   // prevent crash if called with base == 1
   if (base < 2) base = 10;
-
+  if(n < 0){
+      _flag = 0;
+      print('-');
+      n = -n;
+      t += 1;
+  }
   do {
     char c = n % base;
     n /= base;
 
     *--str = c < 10 ? c + '0' : c + 'A' - 10;
   } while(n);
-
-  return write(str);
+  return t + write(str);
 }
-
-size_t DFRobot_CSV::printFloat(double number, uint8_t digits) 
-{ 
+size_t CSV::println(long n, int base){
+  size_t t = print(n, base);
+  t += Print::println();
+  return t;
+}
+size_t CSV::print(double number, int digits){
   size_t n = 0;
-  
-  if (isnan(number)) return print("nan");
-  if (isinf(number)) return print("inf");
-  if (number > 4294967040.0) return print ("ovf");  // constant determined empirically
-  if (number <-4294967040.0) return print ("ovf");  // constant determined empirically
-  
-  // Handle negative numbers
+  if (isnan(number)) return Print::print("nan");
+  if (isinf(number)) return Print::print("inf");
+  if (number > 4294967040.0) return Print::print ("ovf");  // constant determined empirically
+  if (number <-4294967040.0) return Print::print ("ovf");  // constant determined empirically
+  String str = "";
   if (number < 0.0)
   {
-     n += write('-');
+     str += '-';
+     n += 1;
      number = -number;
   }
-
-  // Round correctly so that print(1.999, 2) prints as "2.00"
   double rounding = 0.5;
   for (uint8_t i=0; i<digits; ++i)
     rounding /= 10.0;
-  
   number += rounding;
-
-  // Extract the integer part of the number and print it
   unsigned long int_part = (unsigned long)number;
   double remainder = number - (double)int_part;
-  n += printNumber(int_part,DEC);
-
+  str += int_part;
   // Print the decimal point, but only if there are digits beyond
-  if (digits > 0) {
-    n += write('.'); 
+  if (digits > 0){
+    str += '.';
   }
-
-  // Extract digits from the remainder one at a time
   while (digits-- > 0)
   {
     remainder *= 10.0;
     unsigned int toPrint = (unsigned int)(remainder);
-    n += printNumber(toPrint, DEC);
+    str += toPrint;
     remainder -= toPrint; 
   } 
-  
+  Print::print(str);
+  return n;
+}
+size_t CSV::println(double num, int digits){
+  size_t n = print(num, digits);
+  n += Print::println();
   return n;
 }
 
-/*
-DFRobot_CSV::operator bool() {
-  return (_file->available());
-}
-*/
-
-static struct {
-    size_t column;
-    size_t row;
-}_flags;
-
-typedef struct{
-//  sp_t *point;
-    String *sp;
-    size_t row;
-    size_t column;
-} sRead_t;
-
-static void cbCountRow(int c, void *)
-{
-    _flags.row++;
-}
-
-int DFRobot_CSV::getRow()
-{ 
-  uint8_t readBuf[512] = {0};
-  uint16_t temp;
-  memset(&_flags,0,sizeof(_flags));
-  switch(_type){
-      case TYPE_CSV_UD:
-          ((UDFile *)_file)->seek(0);
-          while((temp =((UDFile *)_file)->read(readBuf, 512)) > 0) {
-              if(csv_parse(&_p,readBuf,temp,NULL,cbCountRow,NULL)!=temp) {
-                  ((UDFile *)_file)->close();
-                  return -1;
-              }
-          }
-           break;
-      case TYPE_CSV_SD:
-           ((File *)_file)->seek(0);
-           while((temp =((File *)_file)->read(readBuf, 512)) > 0) {
-              if(csv_parse(&_p,readBuf,temp,NULL,cbCountRow,NULL)!=temp) {
-                  ((File *)_file)->close();
-                  return -1;
-              }
-          }
-           break;
-  }
-   
-    csv_fini(&_p,NULL,cbCountRow,NULL);     
-    csv_free(&_p);
-    return _flags.row;
-}
-
-static void cbCountColumn(void *s, size_t i, void *data)
-{
-    if(_flags.row == ((sRead_t *)data)->row - 1) 
-        _flags.column++;
-}
-
-
-int DFRobot_CSV::getColumn(int row)
-{
-    sRead_t data = {0,row};  
-    uint8_t readBuf[512] = {0};
-    uint16_t temp;
-    String str;
-    memset(&_flags,0,sizeof(_flags));
-    switch(_type){
-      case TYPE_CSV_UD:
-          ((UDFile *)_file)->seek(0);
-          while((_flags.row < row) && (temp =((UDFile *)_file)->read(readBuf, 512))) {
-              if(csv_parse(&_p,readBuf,temp,cbCountColumn,cbCountRow,&data)!=temp) {
-                ((UDFile *)_file)->close();
-                return -1;
-              }
-          }
-          break;
-      case TYPE_CSV_SD:
-           ((File *)_file)->seek(0);
-           while((_flags.row < row) && (temp =((File *)_file)->read(readBuf, 512))) {
-              if(csv_parse(&_p,readBuf,temp,cbCountColumn,cbCountRow,&data)!=temp) {
-                ((File *)_file)->close();
-                return -1;
-              }
-          }
-           break;
-  }
-          
-    csv_fini(&_p,cbCountColumn,cbCountRow,&data);
-    csv_free(&_p);
-    return _flags.column;
-}
-
-
-static void cbAftFieldCount(void *s, size_t i, void *data) {
-    if(_flags.row == ((sRead_t *)data)->row - 1) {
-        _flags.column++;
-        if(_flags.column == (*(sRead_t *)data).column) {
-            char arr[i+1];
-            for(int j=0;j<i;j++)
-                arr[j] = *((char*)s+j);
-            arr[i] = 0;
-            String string(arr);
-            void *p = calloc(1,sizeof(String));
-            *((String *)p) = string;
-            ((sRead_t *)data)->sp = (String *)p;
-        }
-    }
-}
-
-String DFRobot_CSV::readItem(int row, int column)
-{
-    sRead_t data = {0,row,column};  
-    uint8_t readBuf[512] = {0};
-    uint16_t temp;
-    String str;
-    memset(&_flags,0,sizeof(_flags));
-    switch(_type){
-      case TYPE_CSV_UD:
-          ((UDFile *)_file)->seek(0);
-          while((_flags.row < row) && (temp =((UDFile *)_file)->read(readBuf, 512))) {
-              if(csv_parse(&_p,readBuf,temp,cbAftFieldCount,cbCountRow,&data)!=temp) {
-                ((UDFile *)_file)->close();
-                return String();
-              }
-          }
-          break;
-      case TYPE_CSV_SD:
-           ((File *)_file)->seek(0);
-           while((_flags.row < row) && (temp =((File *)_file)->read(readBuf, 512))) {
-              if(csv_parse(&_p,readBuf,temp,cbAftFieldCount,cbCountRow,&data)!=temp) {
-                ((File *)_file)->close();
-                return String();
-              }
-            }
-           break;
-    }
-    csv_fini(&_p,cbAftFieldCount,cbCountRow,&data);
-    if(data.sp) {
-        str = *(data.sp);
-        free((char *)(data.sp->c_str()));
-        free(data.sp);
-        data.sp = NULL;
-    }
-    csv_free(&_p);
-    return str;
-}
-
-static void cbReadColumn(void *s, size_t i, void *data)
-{   
-    if(_flags.row == ((sRead_t *)data)->row-1) {
-        char arr[i+1];
-        for(int j=0;j<i;j++)
-            arr[j] = *((char*)s+j);
-        arr[i] = 0;
-        String string(arr);
-        ((sRead_t *)data)->sp[_flags.column] = string;
-        _flags.column++;
-//      Serial.print("string");Serial.println(string);
-/*      void *p = calloc(1,sizeof(sp_t));
-        
-        ((sp_t *)p)->pt += string;
-/*      ((sp_t *)p)->pt.buffer = (char *)malloc(i+1);
-        ((sp_t *)p)->pt.capacity = i;
-        if(i == 0) buffer[0] = 0;
-        ((sp_t *)p)->pt.len = i;
-        strcpy(buffer, arr);*/
-
-//      memcpy(p,&string,sizeof(string));
-/*        if(((sRead_t *)data)->point) {
-            sp_t *plast = ((sRead_t *)data)->point;
-            while((*plast).ppt) {
-                plast = (*plast).ppt;
-            }
-            (*plast).ppt = (sp_t *)p;
-        }else {
-            ((sRead_t *)data)->point = (sp_t*)p;
-        }*/
-    }
-}
-
-
-bool DFRobot_CSV::readRow(int row, String * ss)
-{
-    uint8_t readBuf[512] = {0};
-    uint16_t temp;
-    String str;
-    sRead_t data = {ss,row};
-    memset(&_flags,0,sizeof(_flags));
-    switch(_type){
-      case TYPE_CSV_UD:
-          ((UDFile *)_file)->seek(0);
-          while((_flags.row < row) && (temp = ((UDFile *)_file)->read(readBuf, 512))) {
-              if(csv_parse(&_p, readBuf, temp, cbReadColumn, cbCountRow, &data) != temp) {
-                ((UDFile *)_file)->close();
-                return 1;
-              }
-          }
-           break;
-      case TYPE_CSV_SD:
-           ((File *)_file)->seek(0);
-           while((_flags.row < row) && (temp = ((File *)_file)->read(readBuf, 512))) {
-              if(csv_parse(&_p, readBuf, temp, cbReadColumn, cbCountRow, &data) != temp) {
-                ((File *)_file)->close();
-                return 1;
-              }
-          }
-           break;
-  }
-    csv_fini(&_p, cbReadColumn, cbCountRow, &data);
-/*  if(data.point) {
-        plast = data.point;
-        do {
-            str += (*plast).pt;
-            plast = (*plast).ppt;
-            if(plast)
-                str += String(',');
-           }while(plast);   
-    }
-    while(data.point) {
-        pll = plast = data.point;
-        while((*plast).ppt) {
-            pll = plast;
-            plast = (*plast).ppt;
-        }
-        free((char *)((*plast).pt.c_str()));
-        pll->ppt = NULL;
-        free(plast);
-        if(plast == data.point)
-            data.point = NULL;
-    }*/
-    csv_free(&_p);
-    return 0;
-}
+//int CSV::setPosition(int row, int column, String s){
+  
+//}
